@@ -790,7 +790,7 @@ function reportWatchModeWithoutSysSupport(sys: System, reportDiagnostic: Diagnos
 }
 
 // This could be inlined everywhere, but this is convenient for debugging and patching.
-const skipNonSemanticJSDocParsing = true;
+const skipNonSemanticJSDocParsing = false;
 
 function performBuild(
     sys: System,

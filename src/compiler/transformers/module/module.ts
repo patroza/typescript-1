@@ -12,6 +12,7 @@ import {
     chainBundle,
     ClassDeclaration,
     collectExternalModuleInfo,
+    concatenate,
     Debug,
     Declaration,
     DestructuringAssignment,
@@ -88,6 +89,7 @@ import {
     isLocalName,
     isModifier,
     isModifierLike,
+    isNamedDeclaration,
     isNamedExports,
     isObjectLiteralExpression,
     isOmittedExpression,
@@ -99,6 +101,7 @@ import {
     isSpreadElement,
     isStatement,
     isStringLiteral,
+    isTsPlusUniqueIdentifier,
     length,
     mapDefined,
     MergeDeclarationMarker,
@@ -242,7 +245,7 @@ export function transformModule(context: TransformationContext): (x: SourceFile 
         }
         if (length(currentModuleInfo.exportedNames)) {
             const chunkSize = 50;
-            for (let i=0; i<currentModuleInfo.exportedNames!.length; i += chunkSize) {
+            for (let i = 0; i < currentModuleInfo.exportedNames!.length; i += chunkSize) {
                 append(
                     statements,
                     factory.createExpressionStatement(
@@ -980,17 +983,17 @@ export function transformModule(context: TransformationContext): (x: SourceFile 
             /*argumentsArray*/ needSyncEval
                 ? languageVersion >= ScriptTarget.ES2015
                     ? [
-                          factory.createTemplateExpression(factory.createTemplateHead(""), [
-                              factory.createTemplateSpan(arg, factory.createTemplateTail("")),
-                          ]),
-                      ]
+                        factory.createTemplateExpression(factory.createTemplateHead(""), [
+                            factory.createTemplateSpan(arg, factory.createTemplateTail("")),
+                        ]),
+                    ]
                     : [
-                          factory.createCallExpression(
-                              factory.createPropertyAccessExpression(factory.createStringLiteral(""), "concat"),
+                        factory.createCallExpression(
+                            factory.createPropertyAccessExpression(factory.createStringLiteral(""), "concat"),
                               /*typeArguments*/ undefined,
-                              [arg]
-                          ),
-                      ]
+                            [arg]
+                        ),
+                    ]
                 : []
         );
 
@@ -1813,12 +1816,27 @@ export function transformModule(context: TransformationContext): (x: SourceFile 
      */
     function appendExportsOfDeclaration(statements: Statement[] | undefined, decl: Declaration, liveBinding?: boolean): Statement[] | undefined {
         const name = factory.getDeclarationName(decl);
-        const exportSpecifiers = currentModuleInfo.exportSpecifiers.get(idText(name));
-        if (exportSpecifiers) {
-            for (const exportSpecifier of exportSpecifiers) {
-                statements = appendExportStatement(statements, exportSpecifier.name, name, /*location*/ exportSpecifier.name, /*allowComments*/ undefined, liveBinding);
+        // TSPLUS EXTENSION START
+        let exportSpecifiers = currentModuleInfo.exportSpecifiers.get(idText(name));
+        exportSpecifiers ||= [];
+        if (currentModuleInfo.generatedExportSpecifiers) {
+            if (currentModuleInfo.generatedExportSpecifiers.has(name)) {
+                exportSpecifiers = concatenate(exportSpecifiers, currentModuleInfo.generatedExportSpecifiers.get(name)!)
             }
         }
+        // TSPLUS EXTENSION END
+        for (const exportSpecifier of exportSpecifiers) {
+            statements = appendExportStatement(statements, exportSpecifier.name, name, /*location*/ exportSpecifier.name, /*allowComments*/ undefined, liveBinding);
+        }
+        // TSPLUS EXTENSION START
+        if (isNamedDeclaration(decl) && isIdentifier(decl.name) && isTsPlusUniqueIdentifier(decl.name) && currentModuleInfo.generatedExportSpecifiers) {
+            if (currentModuleInfo.generatedExportSpecifiers.has(decl.name)) {
+                for (const exportSpecifier of currentModuleInfo.generatedExportSpecifiers.get(decl.name)!) {
+                    statements = appendExportStatement(statements, exportSpecifier.name, decl.name, exportSpecifier.name, undefined, liveBinding);
+                }
+            }
+        }
+        // TSPLUS EXTENSION END
         return statements;
     }
 
@@ -1911,7 +1929,7 @@ export function transformModule(context: TransformationContext): (x: SourceFile 
                             /*asteriskToken*/ undefined,
                             /*name*/ undefined,
                             /*typeParameters*/ undefined,
-                            /*parameters*/ [],
+                            /*parameters*/[],
                             /*type*/ undefined,
                             factory.createBlock([factory.createReturnStatement(value)])
                         ))

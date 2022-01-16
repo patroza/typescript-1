@@ -359,6 +359,8 @@ import {
     UserPreferences,
     VariableDeclaration,
     walkUpParenthesizedExpressions,
+    isClassDeclaration,
+    isTypeAliasDeclaration,
 } from "./_namespaces/ts";
 import { StringCompletions } from "./_namespaces/ts.Completions";
 
@@ -428,19 +430,19 @@ export enum CompletionSource {
 
 /** @internal */
 export const enum SymbolOriginInfoKind {
-    ThisType             = 1 << 0,
-    SymbolMember         = 1 << 1,
-    Export               = 1 << 2,
-    Promise              = 1 << 3,
-    Nullable             = 1 << 4,
-    ResolvedExport       = 1 << 5,
-    TypeOnlyAlias        = 1 << 6,
-    ObjectLiteralMethod  = 1 << 7,
-    Ignore               = 1 << 8,
+    ThisType = 1 << 0,
+    SymbolMember = 1 << 1,
+    Export = 1 << 2,
+    Promise = 1 << 3,
+    Nullable = 1 << 4,
+    ResolvedExport = 1 << 5,
+    TypeOnlyAlias = 1 << 6,
+    ObjectLiteralMethod = 1 << 7,
+    Ignore = 1 << 8,
     ComputedPropertyName = 1 << 9,
 
     SymbolMemberNoExport = SymbolMember,
-    SymbolMemberExport   = SymbolMember | Export,
+    SymbolMemberExport = SymbolMember | Export,
 }
 
 /** @internal */
@@ -1091,7 +1093,7 @@ function getExhaustiveCaseSnippets(
             : (node: Node) => printer.printNode(EmitHint.Unspecified, node, sourceFile);
         const insertText = map(newClauses, (clause, i) => {
             if (preferences.includeCompletionsWithSnippetText) {
-                return `${printNode(clause)}$${i+1}`;
+                return `${printNode(clause)}$${i + 1}`;
             }
             return `${printNode(clause)}`;
         }).join(newLineChar);
@@ -1582,8 +1584,8 @@ function getEntryForMemberCompletion(
     if (completionNodes.length) {
         const format = ListFormat.MultiLine | ListFormat.NoTrailingNewLine;
         replacementSpan = modifiersSpan;
-         // If we have access to formatting settings, we print the nodes using the emitter,
-         // and then format the printed text.
+        // If we have access to formatting settings, we print the nodes using the emitter,
+        // and then format the printed text.
         if (formatContext) {
             insertText = printer.printAndFormatSnippetList(
                 format,
@@ -1608,7 +1610,7 @@ function getPresentModifiers(
     position: number): { modifiers: ModifierFlags, span?: TextSpan } {
     if (!contextToken ||
         getLineAndCharacterOfPosition(sourceFile, position).line
-            > getLineAndCharacterOfPosition(sourceFile, contextToken.getEnd()).line) {
+        > getLineAndCharacterOfPosition(sourceFile, contextToken.getEnd()).line) {
         return { modifiers: ModifierFlags.None };
     }
     let modifiers = ModifierFlags.None;
@@ -1787,7 +1789,7 @@ function createObjectLiteralMethod(
                 parameters,
                 /*type*/ undefined,
                 body);
-            }
+        }
         default:
             return undefined;
     }
@@ -1994,8 +1996,8 @@ function getInsertTextAndReplacementSpanForImportCompletion(name: string, import
     const quotedModuleSpecifier = escapeSnippetText(quote(sourceFile, preferences, origin.moduleSpecifier));
     const exportKind =
         origin.isDefaultExport ? ExportKind.Default :
-        origin.exportName === InternalSymbolName.ExportEquals ? ExportKind.ExportEquals :
-        ExportKind.Named;
+            origin.exportName === InternalSymbolName.ExportEquals ? ExportKind.ExportEquals :
+                ExportKind.Named;
     const tabStop = preferences.includeCompletionsWithSnippetText ? "$1" : "";
     const importKind = codefix.getImportKind(sourceFile, exportKind, options, /*forceImportKeyword*/ true);
     const isImportSpecifierTypeOnly = importStatementCompletion.couldBeTypeOnlyImportSpecifier;
@@ -2152,6 +2154,15 @@ export function getCompletionEntriesFromSymbols(
             // module imports then the global keywords will be filtered out so auto
             // import suggestions will win in the completion
             const symbolOrigin = skipAlias(symbol, typeChecker);
+            // TSPLUS EXTENSION START
+            const isCompanion = !!find(
+                [...symbol.declarations ?? [], ...symbolOrigin.declarations ?? []],
+                (decl) => (isInterfaceDeclaration(decl) || isTypeAliasDeclaration(decl) || isClassDeclaration(decl)) && !!decl.tsPlusCompanionTags && decl.tsPlusCompanionTags.length > 0
+            )
+            if (isCompanion) {
+                return true;
+            }
+            // TSPLUS EXTENSION END
             // We only want to filter out the global keywords
             // Auto Imports are not available for scripts so this conditional is always false
             if (!!sourceFile.externalModuleIndicator
@@ -2895,6 +2906,19 @@ function getCompletionData(
         return createModuleSpecifierResolutionHost(isFromPackageJson ? host.getPackageJsonAutoImportProvider!()! : program, host);
     });
 
+    // TSPLUS EXTENSION START
+    typeChecker.findAndCheckDoAncestor(node);
+    let currentBinaryAncestor: BinaryExpression | undefined = findAncestor(node, isBinaryExpression);
+    let binaryExpressionParent = currentBinaryAncestor;
+    while (currentBinaryAncestor) {
+        binaryExpressionParent = currentBinaryAncestor;
+        currentBinaryAncestor = findAncestor(currentBinaryAncestor.parent, isBinaryExpression);
+    }
+    if (binaryExpressionParent) {
+        typeChecker.getTypeAtLocation(binaryExpressionParent);
+    }
+    // TSPLUS EXTENSION END
+
     if (isRightOfDot || isRightOfQuestionDot) {
         getTypeScriptMemberSymbols();
     }
@@ -3111,6 +3135,17 @@ function getCompletionData(
             // of the individual types to a higher status since we know what they are.
             symbols.push(...filter(getPropertiesForCompletion(type, typeChecker), s => typeChecker.isValidPropertyAccessForCompletions(propertyAccess, type, s)));
         }
+
+        // TSPLUS EXTENSION START
+        if (isExpression(node)) {
+            const extensions = typeChecker.getExtensions(node);
+            if (extensions) {
+                extensions.forEach((extension) => {
+                    addPropertySymbol(extension, /* insertAwait */ false, /* insertQuestionDot */ false);
+                });
+            }
+        }
+        // TSPLUS EXTENSION END
 
         if (insertAwait && preferences.includeCompletionsWithInsertText) {
             const promiseType = typeChecker.getPromisedTypeOfPromise(type);
@@ -3331,6 +3366,9 @@ function getCompletionData(
                 ? KeywordCompletionFilters.TypeAssertionKeywords
                 : KeywordCompletionFilters.TypeKeywords;
         }
+        // TSPLUS EXTENSION START
+        symbols = concatenate(symbols, typeChecker.getTsPlusGlobals());
+        // TSPLUS EXTENSION END
     }
 
     function shouldOfferImportCompletions(): boolean {
@@ -3373,7 +3411,7 @@ function getCompletionData(
         return contextToken &&
             ((contextToken.kind === SyntaxKind.TypeOfKeyword &&
                 (contextToken.parent.kind === SyntaxKind.TypeQuery || isTypeOfExpression(contextToken.parent))) ||
-            (contextToken.kind === SyntaxKind.AssertsKeyword && contextToken.parent.kind === SyntaxKind.TypePredicate));
+                (contextToken.kind === SyntaxKind.AssertsKeyword && contextToken.parent.kind === SyntaxKind.TypePredicate));
     }
 
     function isContextTokenTypeLocation(contextToken: Node): boolean {
@@ -3423,8 +3461,8 @@ function getCompletionData(
 
         const lowerCaseTokenText =
             isAfterTypeOnlyImportSpecifierModifier ? "" :
-            previousToken && isIdentifier(previousToken) ? previousToken.text.toLowerCase() :
-            "";
+                previousToken && isIdentifier(previousToken) ? previousToken.text.toLowerCase() :
+                    "";
 
         const moduleSpecifierCache = host.getModuleSpecifierCache?.();
         const exportInfo = getExportInfoMap(sourceFile, host, program, preferences, cancellationToken);
@@ -3863,7 +3901,7 @@ function getCompletionData(
         // `import { |` or `import { a as 0, | }` or `import { type | }`
         const namedImportsOrExports =
             contextToken.kind === SyntaxKind.OpenBraceToken || contextToken.kind === SyntaxKind.CommaToken ? tryCast(contextToken.parent, isNamedImportsOrExports) :
-            isTypeKeywordTokenOrIdentifier(contextToken) ? tryCast(contextToken.parent.parent, isNamedImportsOrExports) : undefined;
+                isTypeKeywordTokenOrIdentifier(contextToken) ? tryCast(contextToken.parent.parent, isNamedImportsOrExports) : undefined;
 
         if (!namedImportsOrExports) return GlobalsSearch.Continue;
 
@@ -4256,7 +4294,7 @@ function getCompletionData(
                 // Should not block: `class C { blah = c/**/ }`
                 // But should block: `class C { blah = somewhat c/**/ }` and `class C { blah: SomeType c/**/ }`
                 && (isInitializedProperty(ancestorPropertyDeclaraion as PropertyDeclaration)
-                || hasType(ancestorPropertyDeclaraion))) {
+                    || hasType(ancestorPropertyDeclaraion))) {
                 return true;
             }
         }
@@ -4272,7 +4310,7 @@ function getCompletionData(
     function isPreviousPropertyDeclarationTerminated(contextToken: Node, position: number) {
         return contextToken.kind !== SyntaxKind.EqualsToken &&
             (contextToken.kind === SyntaxKind.SemicolonToken
-            || !positionsAreOnSameLine(contextToken.end, position, sourceFile));
+                || !positionsAreOnSameLine(contextToken.end, position, sourceFile));
     }
 
     function isFunctionLikeButNotConstructor(kind: SyntaxKind) {
@@ -4526,8 +4564,8 @@ function getAutoImportSymbolFromCompletionEntryData(name: string, data: Completi
     const checker = containingProgram.getTypeChecker();
     const moduleSymbol =
         data.ambientModuleName ? checker.tryFindAmbientModule(data.ambientModuleName) :
-        data.fileName ? checker.getMergedSymbol(Debug.checkDefined(containingProgram.getSourceFile(data.fileName)).symbol) :
-        undefined;
+            data.fileName ? checker.getMergedSymbol(Debug.checkDefined(containingProgram.getSourceFile(data.fileName)).symbol) :
+                undefined;
 
     if (!moduleSymbol) return undefined;
     let symbol = data.exportName === InternalSymbolName.ExportEquals
@@ -5168,7 +5206,7 @@ function isDeprecated(symbol: Symbol, checker: TypeChecker) {
  * 'tate' in 'useState'
  * 'ment' in 'ENVIRONMENT_VARIABLE'
  */
- function charactersFuzzyMatchInString(identifierString: string, lowercaseCharacters: string): boolean {
+function charactersFuzzyMatchInString(identifierString: string, lowercaseCharacters: string): boolean {
     if (lowercaseCharacters.length === 0) {
         return true;
     }

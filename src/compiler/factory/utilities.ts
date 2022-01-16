@@ -45,6 +45,7 @@ import {
     first,
     firstOrUndefined,
     ForInitializer,
+    FunctionDeclaration,
     GeneratedIdentifier,
     GeneratedIdentifierFlags,
     GeneratedNamePart,
@@ -75,6 +76,7 @@ import {
     ImportDeclaration,
     ImportEqualsDeclaration,
     InternalEmitFlags,
+    isArrowFunction,
     isAssignmentExpression,
     isAssignmentOperator,
     isAssignmentPattern,
@@ -87,6 +89,8 @@ import {
     isExclamationToken,
     isExportNamespaceAsDefaultDeclaration,
     isFileLevelUniqueName,
+    isFunctionDeclaration,
+    isFunctionExpression,
     isGeneratedIdentifier,
     isGeneratedPrivateIdentifier,
     isIdentifier,
@@ -147,6 +151,7 @@ import {
     OuterExpressionKinds,
     outFile,
     ParenthesizedExpression,
+    ParameterDeclaration,
     parseNodeFactory,
     PlusToken,
     PostfixUnaryExpression,
@@ -178,6 +183,7 @@ import {
     Token,
     TransformFlags,
     TypeNode,
+    VariableDeclaration,
 } from "../_namespaces/ts";
 
 // Compound nodes
@@ -190,7 +196,7 @@ export function createEmptyExports(factory: NodeFactory) {
 /** @internal */
 export function createMemberAccessForPropertyName(factory: NodeFactory, target: Expression, memberName: PropertyName, location?: TextRange): MemberExpression {
     if (isComputedPropertyName(memberName)) {
-         return setTextRange(factory.createElementAccessExpression(target, memberName.expression), location);
+        return setTextRange(factory.createElementAccessExpression(target, memberName.expression), location);
     }
     else {
         const expression = setTextRange(
@@ -616,7 +622,7 @@ export function isCommaExpression(node: Expression): node is BinaryExpression & 
 }
 
 /** @internal */
-export function isCommaSequence(node: Expression): node is BinaryExpression & {operatorToken: Token<SyntaxKind.CommaToken>} | CommaListExpression {
+export function isCommaSequence(node: Expression): node is BinaryExpression & { operatorToken: Token<SyntaxKind.CommaToken> } | CommaListExpression {
     return isCommaExpression(node) || isCommaListExpression(node);
 }
 
@@ -1390,13 +1396,13 @@ namespace BinaryExpressionState {
         switch (currentState) {
             case enter:
                 if (machine.onLeft) return left;
-                // falls through
+            // falls through
             case left:
                 if (machine.onOperator) return operator;
-                // falls through
+            // falls through
             case operator:
                 if (machine.onRight) return right;
-                // falls through
+            // falls through
             case right: return exit;
             case exit: return done;
             case done: return done;
@@ -1448,7 +1454,7 @@ class BinaryExpressionStateMachine<TOuterState, TState, TResult> {
  *
  * @internal
  */
- export function createBinaryExpressionTrampoline<TState, TResult>(
+export function createBinaryExpressionTrampoline<TState, TResult>(
     onEnter: (node: BinaryExpression, prev: TState | undefined) => TState,
     onLeft: ((left: Expression, userState: TState, node: BinaryExpression) => BinaryExpression | void) | undefined,
     onOperator: ((operatorToken: BinaryOperatorToken, userState: TState, node: BinaryExpression) => void) | undefined,
@@ -1577,7 +1583,7 @@ export function formatGeneratedNamePart(part: string | GeneratedNamePart | undef
 export function formatGeneratedNamePart(part: string | GeneratedNamePart | undefined, generateName?: (name: GeneratedIdentifier | GeneratedPrivateIdentifier) => string): string {
     return typeof part === "object" ? formatGeneratedName(/*privateName*/ false, part.prefix, part.node, part.suffix, generateName!) :
         typeof part === "string" ? part.length > 0 && part.charCodeAt(0) === CharacterCodes.hash ? part.slice(1) : part :
-        "";
+            "";
 }
 
 function formatIdentifier(name: string | Identifier | PrivateIdentifier, generateName?: (name: GeneratedIdentifier | GeneratedPrivateIdentifier) => string) {
@@ -1588,8 +1594,8 @@ function formatIdentifier(name: string | Identifier | PrivateIdentifier, generat
 function formatIdentifierWorker(node: Identifier | PrivateIdentifier, generateName: (name: GeneratedIdentifier | GeneratedPrivateIdentifier) => string) {
     return isGeneratedPrivateIdentifier(node) ? generateName(node).slice(1) :
         isGeneratedIdentifier(node) ? generateName(node) :
-        isPrivateIdentifier(node) ? (node.escapedText as string).slice(1) :
-        idText(node);
+            isPrivateIdentifier(node) ? (node.escapedText as string).slice(1) :
+                idText(node);
 }
 
 /**
@@ -1772,4 +1778,13 @@ export function containsObjectRestOrSpread(node: AssignmentPattern): boolean {
         }
     }
     return false;
+}
+
+export function getParametersOfFunctionOrVariableDeclaration(node: FunctionDeclaration | VariableDeclaration): readonly ParameterDeclaration[] | undefined {
+    if (isFunctionDeclaration(node)) {
+        return node.parameters;
+    }
+    if (node.initializer && (isArrowFunction(node.initializer) || isFunctionExpression(node.initializer))) {
+        return node.initializer.parameters
+    }
 }

@@ -8731,7 +8731,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                 if (r) { specifier = r; }
             }
             return specifier
-            }
+        }
 
         function getSpecifierForModuleSymbol(symbol: Symbol, context: NodeBuilderContext, overrideImportMode?: ResolutionMode) {
             let file = getDeclarationOfKind<SourceFile>(symbol, SyntaxKind.SourceFile);

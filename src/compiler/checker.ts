@@ -1084,6 +1084,7 @@ import {
     FromRule,
     getFileMap,
     getImportLocation,
+    tryGetImportLocation,
     getJSDocCommentsAndTags,
     isReturnStatement,
     JSDocTag,
@@ -8171,6 +8172,16 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
             return top;
         }
 
+        function getSpecifierForModuleSymbolSpecial(symbol: Symbol, context: NodeBuilderContext, overrideImportMode?: ResolutionMode) {
+            let specifier = getSpecifierForModuleSymbol(symbol, context, overrideImportMode)
+            // ts plus import workaround
+            if (specifier && specifier.indexOf("/node_modules/") > 0) {
+                const r = tryGetImportLocation(fileMap.map, specifier)
+                if (r) { specifier = r; }
+            }
+            return specifier
+        }
+
         function getSpecifierForModuleSymbol(symbol: Symbol, context: NodeBuilderContext, overrideImportMode?: ResolutionMode) {
             let file = getDeclarationOfKind<SourceFile>(symbol, SyntaxKind.SourceFile);
             if (!file) {
@@ -8256,7 +8267,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                 if (getEmitModuleResolutionKind(compilerOptions) === ModuleResolutionKind.Node16 || getEmitModuleResolutionKind(compilerOptions) === ModuleResolutionKind.NodeNext) {
                     // An `import` type directed at an esm format file is only going to resolve in esm mode - set the esm mode assertion
                     if (targetFile?.impliedNodeFormat === ModuleKind.ESNext && targetFile.impliedNodeFormat !== contextFile?.impliedNodeFormat) {
-                        specifier = getSpecifierForModuleSymbol(chain[0], context, ModuleKind.ESNext);
+                        specifier = getSpecifierForModuleSymbolSpecial(chain[0], context, ModuleKind.ESNext);
                         assertion = factory.createImportTypeAssertionContainer(factory.createAssertClause(factory.createNodeArray([
                             factory.createAssertEntry(
                                 factory.createStringLiteral("resolution-mode"),
@@ -8267,7 +8278,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                     }
                 }
                 if (!specifier) {
-                    specifier = getSpecifierForModuleSymbol(chain[0], context);
+                    specifier = getSpecifierForModuleSymbolSpecial(chain[0], context);
                 }
                 if (!(context.flags & NodeBuilderFlags.AllowNodeModulesRelativePaths) && getEmitModuleResolutionKind(compilerOptions) !== ModuleResolutionKind.Classic && specifier.includes("/node_modules/")) {
                     const oldSpecifier = specifier;

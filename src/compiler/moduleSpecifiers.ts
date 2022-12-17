@@ -851,7 +851,8 @@ function tryGetModuleNameFromExports(options: CompilerOptions, targetFilePath: s
             for (const key of getOwnKeys(exports as MapLike<unknown>)) {
                 if (key === "default" || conditions.indexOf(key) >= 0 || isApplicableVersionedTypesKey(conditions, key)) {
                     const subTarget = (exports as MapLike<unknown>)[key];
-                    const result = tryGetModuleNameFromExports(options, targetFilePath, packageDirectory, packageName, subTarget, conditions);
+                    const mode2 = typeof subTarget === "string" ? endsWith(subTarget, "/") ? 1 /* Directory */ : stringContains(subTarget, "*") ? MatchingMode.Pattern : MatchingMode.Exact : MatchingMode.Exact;
+                    const result = tryGetModuleNameFromExports(options, targetFilePath, packageDirectory, packageName, subTarget, conditions, mode2);
                     if (result) {
                         return result;
                     }
@@ -937,7 +938,7 @@ function tryGetModuleNameAsNodeModule({ path, isRedirect }: ModulePath, { getCan
     }
 
     // If the module was found in @types, get the actual Node package name
-    const nodeModulesDirectoryName = moduleSpecifier.substring(parts.topLevelPackageNameIndex + 1);
+    const nodeModulesDirectoryName = moduleSpecifier.substring(parts.topLevelPackageNameIndex + 1).replace(/\.pnpm\/[^\/]+\/node_modules\//, "");
     const packageName = getPackageNameFromTypesPackageName(nodeModulesDirectoryName);
     // For classic resolution, only allow importing from node_modules/@types, not other node_modules
     return getEmitModuleResolutionKind(options) === ModuleResolutionKind.Classic && packageName === nodeModulesDirectoryName ? undefined : packageName;

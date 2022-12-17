@@ -1081,6 +1081,7 @@ import {
     FromRule,
     getFileMap,
     getImportLocation,
+    tryGetImportLocation,
     getJSDocCommentsAndTags,
     isReturnStatement,
     JSDocTag,
@@ -7264,7 +7265,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         if (!type) {
             return false
         }
-        
+
         // Class companion object
         if (getObjectFlags(type) & ObjectFlags.Anonymous && type.symbol && type.symbol.flags & SymbolFlags.Class) {
             return true
@@ -8722,6 +8723,16 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
             return top;
         }
 
+        function getSpecifierForModuleSymbolSpecial(symbol: Symbol, context: NodeBuilderContext, overrideImportMode?: ResolutionMode) {
+            let specifier = getSpecifierForModuleSymbol(symbol, context, overrideImportMode)
+            // ts plus import workaround
+            if (specifier && specifier.indexOf("/node_modules/") > 0) {
+                const r = tryGetImportLocation(fileMap.map, specifier)
+                if (r) { specifier = r; }
+            }
+            return specifier
+            }
+
         function getSpecifierForModuleSymbol(symbol: Symbol, context: NodeBuilderContext, overrideImportMode?: ResolutionMode) {
             let file = getDeclarationOfKind<SourceFile>(symbol, SyntaxKind.SourceFile);
             if (!file) {
@@ -8807,7 +8818,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                 if (getEmitModuleResolutionKind(compilerOptions) === ModuleResolutionKind.Node16 || getEmitModuleResolutionKind(compilerOptions) === ModuleResolutionKind.NodeNext) {
                     // An `import` type directed at an esm format file is only going to resolve in esm mode - set the esm mode assertion
                     if (targetFile?.impliedNodeFormat === ModuleKind.ESNext && targetFile.impliedNodeFormat !== contextFile?.impliedNodeFormat) {
-                        specifier = getSpecifierForModuleSymbol(chain[0], context, ModuleKind.ESNext);
+                        specifier = getSpecifierForModuleSymbolSpecial(chain[0], context, ModuleKind.ESNext);
                         assertion = factory.createImportTypeAssertionContainer(factory.createAssertClause(factory.createNodeArray([
                             factory.createAssertEntry(
                                 factory.createStringLiteral("resolution-mode"),
@@ -8818,7 +8829,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                     }
                 }
                 if (!specifier) {
-                    specifier = getSpecifierForModuleSymbol(chain[0], context);
+                    specifier = getSpecifierForModuleSymbolSpecial(chain[0], context);
                 }
                 if (!(context.flags & NodeBuilderFlags.AllowNodeModulesRelativePaths) && getEmitModuleResolutionKind(compilerOptions) !== ModuleResolutionKind.Classic && specifier.indexOf("/node_modules/") >= 0) {
                     const oldSpecifier = specifier;
@@ -32739,7 +32750,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         if (forExtension) {
             return forExtension;
         }
-        // TSPLUS EXTENSION END 
+        // TSPLUS EXTENSION END
         const parentSymbol = getNodeLinks(left).resolvedSymbol;
         const assignmentKind = getAssignmentTargetKind(node);
         const apparentType = getApparentType(assignmentKind !== AssignmentKind.None || isMethodAccessForCall(node) ? getWidenedType(leftType) : leftType);
@@ -35789,8 +35800,8 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                     Diagnostics.Deriving_type_0_1,
                     typeToString(derivation.type),
                     `using implicit ${
-                        getSourceFileOfNode(location).fileName !== getSourceFileOfNode(derivation.implicit).fileName ? 
-                            `${getImportPath(derivation.implicit)}#${derivation.implicit.symbol.escapedName}` : 
+                        getSourceFileOfNode(location).fileName !== getSourceFileOfNode(derivation.implicit).fileName ?
+                            `${getImportPath(derivation.implicit)}#${derivation.implicit.symbol.escapedName}` :
                             derivation.implicit.symbol.escapedName
                         }`
                 )
@@ -35856,8 +35867,8 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                         Diagnostics.Deriving_type_0_1,
                         typeToString(derivation.type),
                         `using${(derivation.usedBy.length > 0 ? " (recursive)" : "")} rule ${
-                            getSourceFileOfNode(location).fileName !== getSourceFileOfNode(derivation.rule).fileName ? 
-                                `${getImportPath(derivation.rule)}#${derivation.rule.symbol.escapedName}` : 
+                            getSourceFileOfNode(location).fileName !== getSourceFileOfNode(derivation.rule).fileName ?
+                                `${getImportPath(derivation.rule)}#${derivation.rule.symbol.escapedName}` :
                                 derivation.rule.symbol.escapedName
                             }`
                     )
@@ -36089,7 +36100,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                     if (local.valueDeclaration &&
                         (isParameterDeclaration(local.valueDeclaration as VariableLikeDeclaration) || isLocalImplicit(local.valueDeclaration)) &&
                         isNamedDeclaration(local.valueDeclaration) &&
-                        isIdentifier(local.valueDeclaration.name) && 
+                        isIdentifier(local.valueDeclaration.name) &&
                         isBlockScopedNameDeclaredBeforeUse(local.valueDeclaration.name, location)
                         ) {
                             const { tags: implicitTags, type: implicitType } = getTypeAndImplicitTags(local);
@@ -36648,7 +36659,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         }
         return checked;
     }
-    // TSPLUS EXTENSION END 
+    // TSPLUS EXTENSION END
 
     /**
      * Syntactically and semantically checks a call or new expression.
@@ -42813,7 +42824,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
             const links = getNodeLinks(node);
             if (links.tsPlusPipeableExtension) {
                 checkFluentPipeableAgreement(links.tsPlusPipeableExtension);
-            } 
+            }
         }
     }
 
@@ -50123,7 +50134,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
             signature.parameters[0] &&
             signature.parameters[0].declarations &&
             signature.parameters[0].declarations.find((decl) => isVariableLike(decl) && isParameterDeclaration(decl) && isRestParameter(decl as ParameterDeclaration))
-        ) { 
+        ) {
             return true
         }
         return false;
@@ -50291,7 +50302,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                     priority: tag.priority,
                 });
             }
-        }        
+        }
     }
     function cacheTsPlusGetterVariable(file: SourceFile, declaration: VariableDeclarationWithIdentifier) {
         for (const { target, name } of collectTsPlusGetterTags(declaration)) {
@@ -50807,7 +50818,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                 cacheTsPlusIndexFunction(declaration);
             }
             else {
-                cacheTsPlusIndexVariable(declaration);                        
+                cacheTsPlusIndexVariable(declaration);
             }
         }
         for (const declaration of file.tsPlusContext.pipeableIndex) {
@@ -50815,7 +50826,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                 cacheTsPlusPipeableIndexFunction(declaration);
             }
             else {
-                cacheTsPlusPipeableIndexVariable(declaration);                        
+                cacheTsPlusPipeableIndexVariable(declaration);
             }
         }
     }

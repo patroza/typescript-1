@@ -851,7 +851,7 @@ function tryGetModuleNameFromExports(options: CompilerOptions, targetFilePath: s
             for (const key of getOwnKeys(exports as MapLike<unknown>)) {
                 if (key === "default" || conditions.indexOf(key) >= 0 || isApplicableVersionedTypesKey(conditions, key)) {
                     const subTarget = (exports as MapLike<unknown>)[key];
-                    const mode2 = typeof subTarget === "string" ? endsWith(subTarget, "/") ? 1 /* Directory */ : stringContains(subTarget, "*") ? MatchingMode.Pattern : MatchingMode.Exact : MatchingMode.Exact;
+                    const mode2 = typeof subTarget === "string" ? endsWith(subTarget, "/") ? MatchingMode.Directory : stringContains(subTarget, "*") ? MatchingMode.Pattern : MatchingMode.Exact : MatchingMode.Exact;
                     const result = tryGetModuleNameFromExports(options, targetFilePath, packageDirectory, packageName, subTarget, conditions, mode2);
                     if (result) {
                         return result;

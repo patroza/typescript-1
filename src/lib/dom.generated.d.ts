@@ -17697,6 +17697,12 @@ interface Window extends EventTarget, AnimationFrameProvider, GlobalEventHandler
     addEventListener(type: string, listener: EventListenerOrEventListenerObject, options?: boolean | AddEventListenerOptions): void;
     removeEventListener<K extends keyof WindowEventMap>(type: K, listener: (this: Window, ev: WindowEventMap[K]) => any, options?: boolean | EventListenerOptions): void;
     removeEventListener(type: string, listener: EventListenerOrEventListenerObject, options?: boolean | EventListenerOptions): void;
+
+    // proza: Moved Option here so that it doesnt interfeir in the global space.
+    Option: {
+        new(text?: string, value?: string, defaultSelected?: boolean, selected?: boolean): HTMLOptionElement;
+    };
+
     [index: number]: Window;
 }
 
@@ -18753,9 +18759,6 @@ declare var Audio: {
 };
 declare var Image: {
     new(width?: number, height?: number): HTMLImageElement;
-};
-declare var Option: {
-    new(text?: string, value?: string, defaultSelected?: boolean, selected?: boolean): HTMLOptionElement;
 };
 /** @deprecated This is a legacy alias of `navigator`. */
 declare var clientInformation: Navigator;

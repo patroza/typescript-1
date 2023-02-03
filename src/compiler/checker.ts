@@ -33843,6 +33843,15 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         }
         return false;
     }
+    function isForceLazyParameterByType(type: Type): type is TypeReference {
+        if (type.symbol && type.symbol.declarations && type.symbol.declarations.length > 0) {
+            const tag = collectTsPlusTypeTags(type.symbol.declarations[0])[0];
+            if (tag === "tsplus/ForceLazyArgument") {
+                return true;
+            }
+        }
+        return false;
+    }
     // TSPLUS EXTENSION END
 
     function getMutableArrayOrTupleType(type: Type) {
@@ -34079,7 +34088,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
             // TSPLUS EXTENTION START
             const originalParamType = thisType;
             let paramType = originalParamType;
-            if (isLazyParameterByType(originalParamType) && thisArgumentNode) {
+            if ((isLazyParameterByType(originalParamType) || isForceLazyParameterByType(originalParamType)) && thisArgumentNode) {
                 const contextFreeArgType = thisArgumentType;
                 if (isTypeIdenticalTo(contextFreeArgType, anyType) || isTypeIdenticalTo(contextFreeArgType, neverType)) {
                     return [createDiagnosticForNode(
@@ -34113,7 +34122,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                 const originalParamType = getTypeAtPosition(signature, i);
                 const argType = checkExpressionWithContextualType(arg, unionIfLazy(originalParamType), /*inferenceContext*/ undefined, checkMode);
                 let paramType = originalParamType;
-                if (isLazyParameterByType(originalParamType)) {
+                if (isLazyParameterByType(originalParamType) || isForceLazyParameterByType(originalParamType)) {
                     if ((isTypeIdenticalTo(argType, anyType) || isTypeIdenticalTo(argType, neverType)) && !(checkMode & CheckMode.SkipGenericFunctions)) {
                         return [createDiagnosticForNode(
                             arg,

@@ -2487,7 +2487,11 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
     }
     function unionIfLazy(_paramType: Type) {
         const isLazy = isLazyParameterByType(_paramType);
-        const paramType = isLazy ? getUnionType([_paramType, (_paramType as TypeReference).resolvedTypeArguments![0]], UnionReduction.None) : _paramType;
+        const paramType = isLazy
+            ? getUnionType([_paramType, (_paramType as TypeReference).resolvedTypeArguments![0]], UnionReduction.None)
+            : isForceLazyParameterByType(_paramType)
+                ? (_paramType as TypeReference).resolvedTypeArguments![0]
+                : _paramType;
         return paramType
     }
     function getFluentExtension(targetType: Type, name: string): Type | undefined {

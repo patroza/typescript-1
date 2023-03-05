@@ -50179,7 +50179,26 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
         forEach(heritage, (clause) => {
             forEach(clause.types, (node) => {
                 const type = getTypeOfNode(node);
-                if (isCallExpression(node.expression)) {
+                if (isIdentifier(node.expression)) {
+                    const links = getNodeLinks(node.expression);
+                    const declaration = links.resolvedSymbol?.valueDeclaration
+                    const vType = declaration && checker.getTypeAtLocation(declaration)
+                    if (vType) {
+                        if (vType.symbol) {
+                            heritageExtensions.add(vType.symbol);
+                        }
+                        if (vType.flags & TypeFlags.Intersection) {
+                            forEach((vType as IntersectionType).types, (type2) => {
+                                if (type2.symbol) {
+                                    heritageExtensions.add(type2.symbol);
+                                }
+                                if (type2.aliasSymbol) {
+                                    heritageExtensions.add(type2.aliasSymbol);
+                                }
+                            });
+                        }
+                    }
+                } else if (isCallExpression(node.expression)) {
                     const resolvedSignature = getResolvedSignature(node.expression);
                     const returnType = resolvedSignature.resolvedReturnType
                     if (returnType) {

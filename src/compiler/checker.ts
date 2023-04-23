@@ -50970,7 +50970,7 @@ export function createTypeChecker(host: TypeCheckerHost): TypeChecker {
                 }
                 if (type.symbol) {
                     addToTypeSymbolCache(type.symbol, typeTag, "after");
-                    if ((isInterfaceDeclaration(declaration) || isClassDeclaration(declaration)) && declaration.heritageClauses) {
+                    if ((isInterfaceDeclaration(declaration)) && declaration.heritageClauses) {
                         tryCacheTsPlusInheritance(type.symbol, declaration.heritageClauses);
                     }
                 }
